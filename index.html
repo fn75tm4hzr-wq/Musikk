@@ -63,16 +63,19 @@
   </div>
 </div>
 
+<!-- ============================== LISTER ============================== -->
 <div id="lister" class="page">
   <div class="card">
     <div class="row">
       <input id="newListName" placeholder="Ny liste">
-      <button onclick="createList()">Opprett</button>
+      <button class="btn-p" onclick="createList()">+ Opprett</button>
     </div>
-    <input type="file" id="excelFile" accept=".xlsx" onchange="importExcel(event)">
+    <input type="file" id="excelFile" accept=".xlsx" onchange="importExcel(event)" style="margin-top:8px">
   </div>
-  <div id="lists-container"></div>
+
+  <div id="lists-dashboard"></div>
 </div>
+<!-- ================================================================= -->
 
 <div id="kontrollert" class="page"><div id="archive"></div></div>
 
