@@ -21,11 +21,10 @@
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0}
   .row>*{flex:1;min-width:80px}
   .row button{width:36px;height:36px;font-size:18px;background:#e2e8f0;color:#0f172a;border:none;border-radius:8px}
-  button{display:flex;align-items:center;justify-content:center;background:#0f172a;color:#fff;border:none;padding:12px;border-radius:10px;font-size:16px;font-weight:600;margin:4px 0;width:100%}
+  button{background:#0f172a;color:#fff;border:none;padding:12px;border-radius:10px;font-size:16px;font-weight:600;margin:4px 0;width:100%}
   .btn-green{background:#10b981}
   .btn-amber{background:#f59e0b}
-  .btn-reset{background:#6b7280;margin-top:4px}
-  .placeholder{color:#9ca3af;font-size:14px}
+  .log{font-size:13px;color:#10b981;background:#f0fdf4;padding:6px;border-radius:8px;margin-top:2px}
 </style>
 </head>
 <body>
@@ -36,7 +35,6 @@
   <div class="card">
     <label>Org.nr</label>
     <div class="row"><input id="orgnr" maxlength="9"><button onclick="searchBrreg()">SØK</button></div>
-    <button class="btn-reset" onclick="resetForm()">🗑 Nullstill skjema</button>
     <div class="log" id="brreg-log"></div>
   </div>
 
@@ -72,86 +70,8 @@
 </nav>
 
 <script>
-  const s = localStorage;
-  let lists = JSON.parse(s.getItem('lists') || '[]');
-  let controls = JSON.parse(s.getItem('controls') || '[]');
-
-  function show(p){
-    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
-    document.getElementById(p).classList.add('active');
-    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
-    event.target.classList.add('active');
-    if(p==='lister') renderLists();
-    if(p==='kontrollert') renderArchive();
-  }
-
-  async function searchBrreg(){
-    const n=document.getElementById('orgnr').value.replace(/\D/g,'');
-    if(n.length!==9) return;
-    document.getElementById('brreg-log').innerHTML='Søker...';
-    try{
-      const r=await fetch(`https://data.brreg.no/enhetsregisteret/api/enheter/${n}`);
-      if(!r.ok) throw '';
-      const d=await r.json();
-      const a=d.forretningsadresse||d.beliggenhetsadresse||{};
-      if(!document.getElementById('navn').value) document.getElementById('navn').value=d.navn||'';
-      if(!document.getElementById('besoksadresse').value) document.getElementById('besoksadresse').value=a.adresse?.join(', ')||'';
-      document.getElementById('besoks_postnr').value=a.postnummer||'';
-      document.getElementById('besoks_poststed').value=a.poststed||'';
-      document.getElementById('firma').value=d.navn||'';
-      const k=(d.naeringskode1?.kode||'').slice(0,2);
-      const t= k==='56'?'Serveringssted':(k==='47'||k==='96'?'Kundelokale':'Serveringssted');
-      document.getElementById('type').value=t;
-      document.getElementById('brreg-log').innerHTML='Hentet!';
-      updateTariffDefault();
-    }catch{
-      document.getElementById('brreg-log').innerHTML='Ikke funnet';
-    }
-  }
-
-  function updateTariffDefault(){
-    document.getElementById('tariff-rows').innerHTML='';
-    addRow();
-  }
-
-  function addRow(){
-    const type=document.getElementById('type').value;
-    const r=document.createElement('div'); r.className='row';
-    r.innerHTML=`
-      <input type="number" placeholder="Størrelse (kvm)">
-      ${type==='Serveringssted'?`<input type="number" placeholder="Sitteplasser">`:''}
-      <input type="number" placeholder="Dager pr. uke" value="6">
-      <select>
-        <option>Bakgrunn</option>
-        <option>Fremtredende</option>
-      </select>
-      <button onclick="this.parentElement.remove()">−</button>
-    `;
-    document.getElementById('tariff-rows').appendChild(r);
-  }
-
-  function resetForm(){
-    if(confirm('Nullstille hele skjemaet?')) {
-      document.getElementById('orgnr').value='';
-      document.getElementById('navn').value='';
-      document.getElementById('besoksadresse').value='';
-      document.getElementById('besoks_postnr').value='';
-      document.getElementById('besoks_poststed').value='';
-      document.getElementById('firma').value='';
-      document.getElementById('type').value='Serveringssted';
-      document.getElementById('hoyttalere').value='';
-      document.getElementById('kommentar').value='';
-      document.getElementById('tariff-rows').innerHTML='';
-      document.getElementById('brreg-log').innerHTML='';
-      addRow();
-    }
-  }
-
   // DIN JS-KODE FRA SISTE VERSJON – KOPIER INN HER
   // (jeg kutter for plass – lim inn din egen)
-
-  // INIT
-  addRow();
 </script>
 </body>
 </html>
