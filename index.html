@@ -12,7 +12,7 @@
   nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e2e8f0;display:flex;z-index:20}
   nav button{flex:1;padding:14px;font-weight:600;color:var(--p);background:none;border:none}
   nav button.active{background:var(--p);color:#fff}
-  .page{display:none;padding:16px 16px 100px;max-width:640px;margin:auto}
+  .page{display:none;padding:16px 16px 180px;max-width:640px;margin:auto}
   .page.active{display:block}
   .card{background:#fff;padding:14px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);margin-bottom:12px}
   label{display:block;font-weight:600;margin:8px 0 4px;color:#334155}
@@ -25,18 +25,7 @@
   .btn-a{background:var(--a);color:#fff}
   .btn-r{background:var(--r);color:#fff}
   .log{font-size:13px;color:var(--g);background:#f0fdf4;padding:8px;border-radius:8px;margin-top:4px}
-  .fixed-bottom{position:fixed;bottom:70px;left:16px;right:16px;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);padding:12px;border-radius:12px;box-shadow:0 -2px 12px rgba(0,0,0,.1);z-index:5}
-  .list-card{background:#fff;padding:12px;border-radius:12px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
-  .list-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-  .list-meta{font-size:12px;color:#64748b}
-  .list-item{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #eee}
-  .color-dot{width:14px;height:14px;border-radius:50%;margin-right:10px}
-  .item-info{flex:1}
-  .item-name{font-weight:600;font-size:15px}
-  .item-addr{font-size:13px;color:#64748b}
-  .item-note{font-size:12px;color:#64748b;margin-top:4px;display:none}
-  .list-item:hover .item-note{display:block}
-  .actions button{font-size:20px;background:none;border:none;padding:0 8px}
+  .fixed-bottom{position:fixed;bottom:70px;left:16px;right:16px;background:#fff;padding:12px;border-radius:12px;box-shadow:0 -2px 12px rgba(0,0,0,.1);z-index:5}
   .nattklubb-toggle{margin:8px 0;padding:10px;background:#fff4e5;border-radius:10px;text-align:center}
 </style>
 </head>
@@ -60,6 +49,7 @@
   <div class="card"><label>Firma</label><input id="firma"></div>
   <div class="card"><label>Type</label><select id="type" onchange="updateTariffDefault()"><option>Serveringssted</option><option>Kundelokale</option></select></div>
 
+  <!-- EN FAST BUNN-SEKSJON -->
   <div class="fixed-bottom">
     <div class="nattklubb-toggle">
       <label><input type="checkbox" id="nattklubb" onchange="calc()"> Nattklubb lørdag (52 dager)</label>
@@ -79,6 +69,7 @@
   </div>
 </div>
 
+<!-- LISTER – ENKEL DASHBOARD -->
 <div id="lister" class="page">
   <div class="card">
     <div class="row">
@@ -100,11 +91,9 @@
 
 <script>
   const s = localStorage;
-  let lists = JSON.parse(s.getItem('listsV3') || '[]');
-  let controls = JSON.parse(s.getItem('controls') || '[]');
+  let lists = JSON.parse(s.getItem('listsV4') || '[]');
   let rowId = 0;
 
-  // === NAV ===
   function show(p){
     document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
     document.getElementById(p).classList.add('active');
@@ -114,7 +103,6 @@
     if(p==='kontrollert') renderArchive();
   }
 
-  // === BRREG ===
   async function searchBrreg(){
     const n=document.getElementById('orgnr').value.replace(/\D/g,'');
     if(n.length!==9) return;
@@ -139,10 +127,10 @@
     }
   }
 
-  // === TARIFF ===
   function updateTariffDefault(){
     if(document.getElementById('tariff-rows').children.length===0) addRow();
   }
+
   function addRow(){
     const r=document.createElement('div'); r.className='row'; r.style.margin='8px 0';
     r.innerHTML=`
@@ -154,13 +142,13 @@
     document.getElementById('tariff-rows').appendChild(r);
   }
 
-  // === KALKULATOR ===
+  // === KALKULATOR (ditt Excel + ditt skjermbilde) ===
   const gramoNormalDag = [10.26,19.69,29.12,38.55,47.98,57.41,66.84,76.27];
   const gramoNattDag = [102.72,171.21,239.7,308.17,376.67,462.25,547.86,633.6];
   const tonoMnd = [701,1045,1573,1847,2454,2781];
   const tonoNattDag = [77,111,173,228,337,453];
 
-  function getIndex(val, arr){
+  function getIndex(val){
     if(val<=50) return 0;
     if(val<=100) return 1;
     if(val<=150) return 2;
@@ -180,8 +168,8 @@
     const normalDager = dagerUke * 52;
     const nattDager = document.getElementById('nattklubb').checked ? 52 : 0;
 
-    const k = getIndex(kvm, gramoNormalDag);
-    const s = getIndex(seter, tonoMnd);
+    const k = getIndex(kvm);
+    const s = getIndex(seter);
 
     const gramo = gramoNormalDag[k] * normalDager + gramoNattDag[k] * nattDager;
     const tono = tonoMnd[s] * 12 + tonoNattDag[s] * nattDager;
@@ -198,7 +186,7 @@
   function createList(){
     const name = document.getElementById('newListName').value.trim() || 'Liste '+new Date().toLocaleDateString();
     lists.push({id:Date.now(), name, date:new Date().toISOString(), items:[]});
-    s.setItem('listsV3', JSON.stringify(lists));
+    s.isetItem('listsV4', JSON.stringify(lists));
     document.getElementById('newListName').value='';
     renderLists();
   }
@@ -206,7 +194,7 @@
   function deleteList(id){
     if(confirm('Slette '+lists.find(l=>l.id===id).name+'?')) {
       lists = lists.filter(l=>l.id!==id);
-      s.setItem('listsV3', JSON.stringify(lists));
+      s.setItem('listsV4', JSON.stringify(lists));
       renderLists();
     }
   }
@@ -226,7 +214,7 @@
           list.items.push(o);
         });
       });
-      s.setItem('listsV3', JSON.stringify(lists));
+      s.setItem('listsV4', JSON.stringify(lists));
       renderLists();
     };
     reader.readAsArrayBuffer(file);
@@ -254,10 +242,10 @@
           <div class="item-info">
             <div class="item-name">${item.Orgnummer||''} ${item.Navn||''}</div>
             <div class="item-addr">${item.Besøksadresse||''} ${item.Postnr||''} ${item.Poststed||''}</div>
-            <div class="item-note" contenteditable="true" onblur="lists.find(l=>l.id===${list.id}).items[${i}].note=this.innerText;s.setItem('listsV3',JSON.stringify(lists))">${item.note||'Trykk for notat'}</div>
+            <div class="item-note" contenteditable="true" onblur="lists.find(l=>l.id===${list.id}).items[${i}].note=this.innerText;s.setItem('listsV4',JSON.stringify(lists))">${item.note||'Trykk for notat'}</div>
           </div>
           <div class="actions">
-            <select onchange="lists.find(l=>l.id===${list.id}).items[${i}].color=this.value;s.setItem('listsV3',JSON.stringify(lists));renderLists()">
+            <select onchange="lists.find(l=>l.id===${list.id}).items[${i}].color=this.value;s.setItem('listsV4',JSON.stringify(lists));renderLists()">
               <option value="0" ${item.color==0?'selected':''}>⚪</option>
               <option value="1" ${item.color==1?'selected':''}>🟢</option>
               <option value="2" ${item.color==2?'selected':''}>🟡</option>
@@ -280,7 +268,7 @@
     document.getElementById('besoks_postnr').value = item.Postnr||'';
     document.getElementById('besoks_poststed').value = item.Poststed||'';
     show('kontroll');
-    searchBrreg(); // fyller resten
+    searchBrreg();
   }
 
   // === INIT ===
