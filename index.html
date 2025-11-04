@@ -26,6 +26,7 @@
   .btn-amber{background:#f59e0b}
   .btn-reset{background:#6b7280;margin-top:4px}
   .log{font-size:13px;color:#10b981;background:#f0fdf4;padding:6px;border-radius:8px;margin-top:2px}
+  .color-dot{width:16px;height:16px;border-radius:50%;margin-top:4px}
 </style>
 </head>
 <body>
@@ -76,122 +77,328 @@
 </div>
 <!-- ================================================================= -->
 
+<div id="kontrollert" class="page"><div id="archive"></div></div>
+
+<nav>
+  <button class="active" onclick="show('kontroll')">Skjema</button>
+  <button onclick="show('lister')">Lister</button>
+  <button onclick="show('kontrollert')">Ferdig</button>
+</nav>
+
 <script>
-// LISTER – ALT DU BA OM
-function createList(){
-  const name = document.getElementById('newListName').value.trim() || 'Liste '+new Date().toLocaleDateString();
-  lists.push({id:Date.now(), name, date:new Date().toISOString(), items:[]});
-  s.setItem('lists',JSON.stringify(lists));
-  document.getElementById('newListName').value='';
-  renderDashboard();
-}
+  const s = localStorage;
+  let lists = JSON.parse(s.getItem('lists') || '[]');
+  let controls = JSON.parse(s.getItem('controls') || '[]');
 
-function deleteList(id){
-  if(confirm('Slette hele listen?')) {
-    lists = lists.filter(l=>l.id!==id);
-    s.setItem('lists',JSON.stringify(lists));
-    renderDashboard();
+  function show(p){
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+    document.getElementById(p).classList.add('active');
+    document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+    event.target.classList.add('active');
+    if(p==='lister') renderDashboard();
+    if(p==='kontrollert') renderArchive();
   }
-}
 
-function deleteItem(listId, idx){
-  if(confirm('Slette denne raden?')) {
-    const L = lists.find(l=>l.id===listId);
-    L.items.splice(idx,1);
-    s.setItem('lists',JSON.stringify(lists));
-    renderDashboard();
+  async function searchBrreg(){
+    const n=document.getElementById('orgnr').value.replace(/\D/g,'');
+    if(n.length!==9) return;
+    document.getElementById('brreg-log').innerHTML='Søker...';
+    try{
+      const r=await fetch(`https://data.brreg.no/enhetsregisteret/api/enheter/${n}`);
+      if(!r.ok) throw '';
+      const d=await r.json();
+      const a=d.forretningsadresse||d.beliggenhetsadresse||{};
+      if(!document.getElementById('navn').value) document.getElementById('navn').value=d.navn||'';
+      if(!document.getElementById('besoksadresse').value) document.getElementById('besoksadresse').value=a.adresse?.join(', ')||'';
+      document.getElementById('besoks_postnr').value=a.postnummer||'';
+      document.getElementById('besoks_poststed').value=a.poststed||'';
+      document.getElementById('firma').value=d.navn||'';
+      const k=(d.naeringskode1?.kode||'').slice(0,2);
+      const t= k==='56'?'Serveringssted':(k==='47'||k==='96'?'Kundelokale':'Serveringssted');
+      document.getElementById('type').value=t;
+      document.getElementById('brreg-log').innerHTML='Hentet!';
+      updateTariffDefault();
+    }catch{
+      document.getElementById('brreg-log').innerHTML='Ikke funnet';
+    }
   }
-}
 
-function addManualItem(listId){
-  const L = lists.find(l=>l.id===listId);
-  L.items.push({Orgnummer:'',Navn:'',Besøksadresse:'',Postnr:'',Poststed:'',note:'',color:0});
-  s.setItem('lists',JSON.stringify(lists));
-  renderDashboard();
-}
+  function updateTariffDefault(){
+    document.getElementById('tariff-rows').innerHTML='';
+    addRow();
+  }
 
-function sortBy(prop){
-  lists.forEach(L=>L.items.sort((a,b)=> (a[prop]||'').localeCompare(b[prop]||'')));
-  s.setItem('lists',JSON.stringify(lists));
-  renderDashboard();
-}
-
-function openMap(addr){
-  if(!addr) return;
-  const q=encodeURIComponent(addr);
-  window.open(`https://maps.apple.com/?q=${q}`,'_blank');
-}
-
-function moveToDone(listId, idx){
-  const L = lists.find(l=>l.id===listId);
-  const item = L.items.splice(idx,1)[0];
-  const data = getFormData();
-  data.orgnr = item.Orgnummer||'';
-  data.navn = item.Navn||'';
-  data.adresse = item.Besøksadresse||'';
-  data.postnr = item.Postnr||'';
-  data.poststed = item.Poststed||'';
-  data.kommentar = item.note||'';
-  data.dato = new Date().toISOString();
-  controls.push(data);
-  s.setItem('controls',JSON.stringify(controls));
-  s.setItem('lists',JSON.stringify(lists));
-  renderDashboard();
-  renderArchive();
-  alert('Flyttet til Ferdig!');
-}
-
-function renderDashboard(){
-  const d=document.getElementById('lists-dashboard'); d.innerHTML='';
-  lists.sort((a,b)=>b.date.localeCompare(a.date)).forEach(L=>{
-    const box=document.createElement('div'); box.className='card';
-    box.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <strong>${L.name}</strong>
-        <small>${new Date(L.date).toLocaleDateString()}</small>
-        <button class="btn-r" style="padding:4px 8px" onclick="deleteList(${L.id})">🗑</button>
-      </div>
-      <div style="margin-bottom:8px">
-        <button onclick="sortBy('color')" style="margin-right:4px">Farge</button>
-        <button onclick="sortBy('Besøksadresse')">Adresse</button>
-        <button class="btn-green" style="float:right;padding:4px 8px" onclick="addManualItem(${L.id})">+ Ny rad</button>
-      </div>
-      <div id="items-${L.id}"></div>
+  function addRow(){
+    const type=document.getElementById('type').value;
+    const r=document.createElement('div'); r.className='row';
+    r.innerHTML=`
+      <input type="number" placeholder="Størrelse (kvm)">
+      ${type==='Serveringssted'?`<input type="number" placeholder="Sitteplasser">`:''}
+      <input type="number" placeholder="Dager pr. uke" value="6">
+      <select>
+        <option>Bakgrunn</option>
+        <option>Fremtredende</option>
+      </select>
+      <button onclick="this.parentElement.remove()">−</button>
     `;
-    d.appendChild(box);
-    const c=document.getElementById(`items-${L.id}`);
-    L.items.forEach((it,i)=>{
-      const colors=['#fff','#10b981','#f59e0b','#ef4444'];
-      const addr = `${it.Besøksadresse||''} ${it.Postnr||''} ${it.Poststed||''}`.trim();
-      const row=document.createElement('div'); row.className='row';
-      row.style='background:white;padding:8px;border-radius:8px;margin:4px 0;align-items:flex-start';
-      row.innerHTML=`
-        <div class="color-dot" style="background:${colors[it.color||0]};width:16px;height:16px;border-radius:50%;margin-top:4px"></div>
-        <div style="flex:1">
-          <div style="font-weight:600">${it.Orgnummer||''} ${it.Navn||''}</div>
-          <div onclick="openMap('${addr}')" style="color:#0066cc;cursor:pointer">${addr||'–'}</div>
-          <div contenteditable onblur="L.items[${i}].note=this.innerText;s.setItem('lists',JSON.stringify(lists))" style="font-size:13px;color:#666;margin-top:2px">
-            ${it.note||'Trykk for notat'}
-          </div>
-        </div>
-        <div style="display:flex;gap:4px">
-          <select onchange="L.items[${i}].color=this.value;s.setItem('lists',JSON.stringify(lists));renderDashboard()" style="width:40px;padding:4px">
-            <option value="0" ${it.color==0?'selected':''}>⚪</option>
-            <option value="1" ${it.color==1?'selected':''}>🟢</option>
-            <option value="2" ${it.color==2?'selected':''}>🟡</option>
-            <option value="3" ${it.color==3?'selected':''}>🔴</option>
-          </select>
-          <button onclick="loadFromList(${L.id},${i})" style="padding:4px 8px">Start</button>
-          <button onclick="moveToDone(${L.id},${i})" class="btn-green" style="padding:4px 8px">✔</button>
-          <button onclick="deleteItem(${L.id},${i})" class="btn-r" style="padding:4px 8px">−</button>
-        </div>
-      `;
-      c.appendChild(row);
-    });
-  });
-}
+    document.getElementById('tariff-rows').appendChild(r);
+  }
 
-renderDashboard();
+  function resetForm(){
+    if(confirm('Nullstille hele skjemaet?')) {
+      document.getElementById('orgnr').value='';
+      document.getElementById('navn').value='';
+      document.getElementById('besoksadresse').value='';
+      document.getElementById('besoks_postnr').value='';
+      document.getElementById('besoks_poststed').value='';
+      document.getElementById('firma').value='';
+      document.getElementById('type').value='Serveringssted';
+      document.getElementById('hoyttalere').value='';
+      document.getElementById('kommentar').value='';
+      document.getElementById('tariff-rows').innerHTML='';
+      document.getElementById('brreg-log').innerHTML='';
+      addRow();
+    }
+  }
+
+  function getFormData(){
+    const rows=[];
+    document.querySelectorAll('#tariff-rows .row').forEach(r=>{
+      const i=r.querySelectorAll('input,select');
+      const isServ=document.getElementById('type').value==='Serveringssted';
+      rows.push({
+        kvm:i[0].value,
+        seter:isServ?i[1].value:'',
+        dager:i[isServ?2:1].value,
+        type:i[isServ?3:2].value
+      });
+    });
+    return {
+      orgnr:document.getElementById('orgnr').value,
+      navn:document.getElementById('navn').value,
+      adresse:document.getElementById('besoksadresse').value,
+      postnr:document.getElementById('besoks_postnr').value,
+      poststed:document.getElementById('besoks_poststed').value,
+      firma:document.getElementById('firma').value,
+      type:document.getElementById('type').value,
+      tariff:rows,
+      hoyttalere:document.getElementById('hoyttalere').value,
+      kommentar:document.getElementById('kommentar').value,
+      dato:new Date().toISOString()
+    };
+  }
+
+  function save(status){
+    const data=getFormData();
+    data.status=status;
+    controls.push(data);
+    s.setItem('controls',JSON.stringify(controls));
+    alert(status==='sent'?'Sendt! PDF lastet ned.':'Lagret!');
+    if(status==='sent') generatePDF(data);
+  }
+
+  function generatePDF(data){
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF();
+    let y=20;
+    doc.setFontSize(16); doc.text('MUSIKKONTROLL',105,y,{align:'center'}); y+=10;
+    doc.setFontSize(12);
+    doc.text(`Org.nr: ${data.orgnr}`,20,y); y+=8;
+    doc.text(`Navn: ${data.navn}`,20,y); y+=8;
+    doc.text(`Adresse: ${data.adresse}`,20,y); y+=8;
+    doc.text(`Post: ${data.postnr} ${data.poststed}`,20,y); y+=8;
+    data.tariff.forEach((t,i)=>{
+      doc.text(`${i+1}. ${t.type}: ${t.kvm} kvm${t.seter?`, ${t.seter} seter`:''}, ${t.dager} dager`,25,y); y+=8;
+    });
+    doc.text(`Høyttalere: ${data.hoyttalere}`,20,y); y+=8;
+    doc.text(`Kommentar: ${data.kommentar}`,20,y);
+    const blob=doc.output('blob');
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=`kontroll-${data.orgnr}.pdf`; a.click();
+    alert('PDF lastet ned! Send manuelt til kjartan.lode@tono.no');
+  }
+
+  function printReceipt(){
+    const data=getFormData();
+    const text=`KONTROLL\n${data.navn}\n${data.orgnr}\n${data.tariff.map(t=>`${t.type}: ${t.kvm}kvm/${t.dager}d`).join('\n')}\n${data.kommentar}`;
+    const win=window.open('','','width=300,height=500');
+    win.document.write('<pre style="font:14px monospace">'+text+'</pre>');
+    win.print();
+  }
+
+  // === LISTER – ALT DU BA OM ===
+  function createList(){
+    const name = document.getElementById('newListName').value.trim() || 'Liste '+new Date().toLocaleDateString();
+    lists.push({id:Date.now(), name, date:new Date().toISOString(), items:[]});
+    s.setItem('lists',JSON.stringify(lists));
+    document.getElementById('newListName').value='';
+    renderDashboard();
+  }
+
+  function deleteList(id){
+    if(confirm('Slette hele listen?')) {
+      lists = lists.filter(l=>l.id!==id);
+      s.setItem('lists',JSON.stringify(lists));
+      renderDashboard();
+    }
+  }
+
+  function deleteItem(listId, idx){
+    if(confirm('Slette denne raden?')) {
+      const L = lists.find(l=>l.id===listId);
+      L.items.splice(idx,1);
+      s.setItem('lists',JSON.stringify(lists));
+      renderDashboard();
+    }
+  }
+
+  function addManualItem(listId){
+    const L = lists.find(l=>l.id===listId);
+    L.items.push({Orgnummer:'',Navn:'',Besøksadresse:'',Postnr:'',Poststed:'',note:'',color:0});
+    s.setItem('lists',JSON.stringify(lists));
+    renderDashboard();
+  }
+
+  function sortBy(prop){
+    lists.forEach(L=>L.items.sort((a,b)=> (a[prop]||'').localeCompare(b[prop]||'')));
+    s.setItem('lists',JSON.stringify(lists));
+    renderDashboard();
+  }
+
+  function openMap(addr){
+    if(!addr) return;
+    const q=encodeURIComponent(addr);
+    window.open(`https://maps.apple.com/?q=${q}`,'_blank');
+  }
+
+  function moveToDone(listId, idx){
+    const L = lists.find(l=>l.id===listId);
+    const item = L.items.splice(idx,1)[0];
+    const data = getFormData();
+    data.orgnr = item.Orgnummer||'';
+    data.navn = item.Navn||'';
+    data.adresse = item.Besøksadresse||'';
+    data.postnr = item.Postnr||'';
+    data.poststed = item.Poststed||'';
+    data.kommentar = item.note||'';
+    data.dato = new Date().toISOString();
+    controls.push(data);
+    s.setItem('controls',JSON.stringify(controls));
+    s.setItem('lists',JSON.stringify(lists));
+    renderDashboard();
+    renderArchive();
+    alert('Flyttet til Ferdig!');
+  }
+
+  function renderDashboard(){
+    const d=document.getElementById('lists-dashboard'); d.innerHTML='';
+    lists.sort((a,b)=>b.date.localeCompare(a.date)).forEach(L=>{
+      const box=document.createElement('div'); box.className='card';
+      box.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong>${L.name}</strong>
+          <small>${new Date(L.date).toLocaleDateString()}</small>
+          <button class="btn-r" style="padding:4px 8px" onclick="deleteList(${L.id})">🗑</button>
+        </div>
+        <div style="margin-bottom:8px">
+          <button onclick="sortBy('color')" style="margin-right:4px">Farge</button>
+          <button onclick="sortBy('Besøksadresse')">Adresse</button>
+          <button class="btn-green" style="float:right;padding:4px 8px" onclick="addManualItem(${L.id})">+ Ny rad</button>
+        </div>
+        <div id="items-${L.id}"></div>
+      `;
+      d.appendChild(box);
+      const c=document.getElementById(`items-${L.id}`);
+      L.items.forEach((it,i)=>{
+        const colors=['#fff','#10b981','#f59e0b','#ef4444'];
+        const addr = `${it.Besøksadresse||''} ${it.Postnr||''} ${it.Poststed||''}`.trim();
+        const row=document.createElement('div'); row.className='row';
+        row.style='background:white;padding:8px;border-radius:8px;margin:4px 0;align-items:flex-start';
+        row.innerHTML=`
+          <div class="color-dot" style="background:${colors[it.color||0]};width:16px;height:16px;border-radius:50%;margin-top:4px"></div>
+          <div style="flex:1">
+            <div style="font-weight:600">${it.Orgnummer||''} ${it.Navn||''}</div>
+            <div onclick="openMap('${addr}')" style="color:#0066cc;cursor:pointer">${addr||'–'}</div>
+            <div contenteditable onblur="L.items[${i}].note=this.innerText;s.setItem('lists',JSON.stringify(lists))" style="font-size:13px;color:#666;margin-top:2px">
+              ${it.note||'Trykk for notat'}
+            </div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <select onchange="L.items[${i}].color=this.value;s.setItem('lists',JSON.stringify(lists));renderDashboard()" style="width:40px;padding:4px">
+              <option value="0" ${it.color==0?'selected':''}>⚪</option>
+              <option value="1" ${it.color==1?'selected':''}>🟢</option>
+              <option value="2" ${it.color==2?'selected':''}>🟡</option>
+              <option value="3" ${it.color==3?'selected':''}>🔴</option>
+            </select>
+            <button onclick="loadFromList(${L.id},${i})" style="padding:4px 8px">Start</button>
+            <button onclick="moveToDone(${L.id},${i})" class="btn-green" style="padding:4px 8px">✔</button>
+            <button onclick="deleteItem(${L.id},${i})" class="btn-r" style="padding:4px 8px">−</button>
+          </div>
+        `;
+        c.appendChild(row);
+      });
+    });
+  }
+
+  function loadFromList(listId, idx){
+    const L = lists.find(l=>l.id===listId);
+    const item = L.items[idx];
+    document.getElementById('orgnr').value = item.Orgnummer||'';
+    document.getElementById('navn').value = item.Navn||'';
+    document.getElementById('besoksadresse').value = item.Besøksadresse||'';
+    document.getElementById('besoks_postnr').value = item.Postnr||'';
+    document.getElementById('besoks_poststed').value = item.Poststed||'';
+    show('kontroll');
+    searchBrreg();
+  }
+
+  function renderArchive(){
+    const div = document.getElementById('archive');
+    div.innerHTML = '';
+    const byMonth = {};
+    controls.forEach(c => {
+      const m = new Date(c.dato).toLocaleDateString('nb-NO', { year: 'numeric', month: 'long' });
+      byMonth[m] = byMonth[m] || [];
+      byMonth[m].push(c);
+    });
+    Object.keys(byMonth).sort().reverse().forEach(month => {
+      const el = document.createElement('div');
+      el.className = 'month';
+      el.textContent = month;
+      byMonth[month].forEach(c => {
+        const li = document.createElement('div');
+        li.style = 'background:white;padding:12px;margin:8px 0;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);';
+        const frem = c.tariff.find(t => t.type === 'Fremtredende');
+        li.innerHTML = `<b>${c.navn}</b> – ${new Date(c.dato).toLocaleDateString('nb-NO')}<br>
+          ${c.tariff.map(t => `${t.kvm} kvm • ${t.seter} seter • ${t.dager} dager • ${t.type}`).join('<br>')}
+          ${frem ? '<br>🎤 Fremtredende' : ''}
+          <button onclick="editControl('${c.dato}')" style="float:right;background:#f97316;color:white;padding:6px 10px;border-radius:8px">Rediger</button>`;
+        el.appendChild(li);
+      });
+      div.appendChild(el);
+    });
+  }
+
+  window.editControl = function(date) {
+    const c = controls.find(x => x.dato === date);
+    document.getElementById('orgnr').value = c.orgnr;
+    document.getElementById('navn').value = c.navn;
+    document.getElementById('besoksadresse').value = c.adresse;
+    document.getElementById('besoks_postnr').value = c.postnr;
+    document.getElementById('besoks_poststed').value = c.poststed;
+    document.getElementById('firma').value = c.firma;
+    document.getElementById('type').value = c.type;
+    document.getElementById('hoyttalere').value = c.hoyttalere;
+    document.getElementById('kommentar').value = c.kommentar;
+    document.getElementById('tariff-rows').innerHTML = '';
+    c.tariff.forEach(t => addRow(t));
+    show('kontroll');
+  };
+
+  // INIT
+  addRow();
+  renderDashboard();
 </script>
 </body>
 </html>
