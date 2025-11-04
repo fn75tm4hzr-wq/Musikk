@@ -26,18 +26,18 @@
   .btn-amber{background:#f59e0b}
   .btn-reset{background:#6b7280;margin-top:4px}
   .log{font-size:13px;color:#10b981;background:#f0fdf4;padding:6px;border-radius:8px;margin-top:2px}
-  .list-header{font-weight:600;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .list-header{font-weight:600;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;cursor:pointer}
+  .list-header span:hover{text-decoration:underline}
   .list-table{width:100%;border-collapse:collapse;margin-top:8px}
   .list-table th{background:#f1f5f9;padding:8px;text-align:left;font-weight:600;font-size:14px;cursor:pointer}
+  .list-table th:hover{background:#e5e7eb}
   .list-table td{padding:8px;vertical-align:top;border-bottom:1px solid #e2e8f0}
-  .list-row{cursor:grab}
+  .list-row{cursor:grab;background:white}
+  .list-row:hover{background:#f9fafb}
   .list-row:active{cursor:grabbing}
-  .list-row.green{background:#ecfdf5}
-  .list-row.yellow{background:#fefce8}
-  .list-row.red{background:#fee2e2}
-  .map-btn{background:#0066cc;color:white;padding:4px 8px;border-radius:50%;font-size:12px}
+  .map-btn{background:#0066cc;color:white;padding:4px 8px;border-radius:50%;font-size:12px;margin-left:4px}
   .action-btns{display:flex;gap:4px}
-  .action-btns button{width:36px;height:36px;padding:0}
+  .action-btns button{width:36px;height:36px;padding:0;font-size:14px}
   .month-header{background:#f1f5f9;padding:12px;border-radius:12px;margin:12px 0;font-weight:600}
   .archive-item{background:white;padding:12px;margin:8px 0;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05)}
 </style>
@@ -203,7 +203,6 @@
     alert(status==='sent'?'Sendt! PDF lastet ned.':'Lagret!');
     if(status==='sent') {
       generatePDF(data);
-      // Fjern fra Lister hvis den kom derfra
       const currentList = lists.find(l => l.items.some(it => it.Orgnummer === data.orgnr));
       if(currentList) {
         currentList.items = currentList.items.filter(it => it.Orgnummer !== data.orgnr);
@@ -239,7 +238,7 @@
   function printReceipt(){
     const data=getFormData();
     const text=`KONTROLL\n${data.navn}\n${data.orgnr}\n${data.tariff.map(t=>`${t.type}: ${t.kvm}kvm/${t.dager}d`).join('\n')}\n${data.kommentar}`;
-    const win=window.open('','','width=300,height=500');
+    const win=window.open('','','width=300,height:500');
     win.document.write('<pre style="font:14px monospace">'+text+'</pre>');
     win.print();
   }
@@ -326,7 +325,7 @@
       const box=document.createElement('div'); box.className='card';
       box.innerHTML=`
         <div class="list-header">
-          <span onclick="editListName(${L.id})" style="cursor:pointer">${L.name}</span>
+          <span onclick="editListName(${L.id})">${L.name}</span>
           <small>${new Date(L.date).toLocaleDateString()}</small>
           <button class="btn-r" style="padding:4px 8px" onclick="deleteList(${L.id})">🗑</button>
         </div>
@@ -347,9 +346,7 @@
       d.appendChild(box);
       const tbody=document.getElementById(`tbody-${L.id}`);
       L.items.forEach((it,i)=>{
-        const colors=['','#ecfdf5','#fefce8','#fee2e2'];
         const tr=document.createElement('tr'); tr.className='list-row';
-        tr.style.background=colors[it.color||0];
         tr.draggable=true;
         tr.ondragstart=e=>e.dataTransfer.setData('text',i);
         tr.ondragover=e=>e.preventDefault();
