@@ -38,6 +38,8 @@
   .map-btn{background:#0066cc;color:white;padding:4px 8px;border-radius:50%;font-size:12px}
   .action-btns{display:flex;gap:4px}
   .action-btns button{width:36px;height:36px;padding:0}
+  .month-header{background:#f1f5f9;padding:12px;border-radius:12px;margin:12px 0;font-weight:600}
+  .archive-item{background:white;padding:12px;margin:8px 0;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05)}
 </style>
 </head>
 <body>
@@ -115,7 +117,6 @@
       if(!r.ok) throw '';
       const d=await r.json();
       const a=d.forretningsadresse||d.beliggenhetsadresse||{};
-      // BEHOLDER navn og adresse – overskriver kun post
       document.getElementById('besoks_postnr').value=a.postnummer||'';
       document.getElementById('besoks_poststed').value=a.poststed||'';
       document.getElementById('firma').value=d.navn||'';
@@ -209,6 +210,7 @@
         s.setItem('lists',JSON.stringify(lists));
         renderDashboard();
       }
+      renderArchive();
     }
   }
 
@@ -390,7 +392,7 @@
     document.getElementById('besoks_postnr').value = item.Postnr||'';
     document.getElementById('besoks_poststed').value = item.Poststed||'';
     show('kontroll');
-    searchBrreg(); // Henter kun postadresse
+    searchBrreg();
   }
 
   function deleteItem(listId, idx){
@@ -402,9 +404,53 @@
     }
   }
 
+  function renderArchive(){
+    const div = document.getElementById('archive');
+    div.innerHTML = '';
+    const byMonth = {};
+    controls.forEach(c => {
+      const m = new Date(c.dato).toLocaleDateString('nb-NO', { year: 'numeric', month: 'long' });
+      byMonth[m] = byMonth[m] || [];
+      byMonth[m].push(c);
+    });
+    Object.keys(byMonth).sort().reverse().forEach(month => {
+      const el = document.createElement('div');
+      el.className = 'month-header';
+      el.textContent = month;
+      div.appendChild(el);
+      byMonth[month].forEach(c => {
+        const li = document.createElement('div');
+        li.className = 'archive-item';
+        const frem = c.tariff.find(t => t.type === 'Fremtredende');
+        li.innerHTML = `<b>${c.navn}</b> – ${new Date(c.dato).toLocaleDateString('nb-NO')}<br>
+          ${c.tariff.map(t => `${t.kvm} kvm • ${t.seter} seter • ${t.dager} dager • ${t.type}`).join('<br>')}
+          ${frem ? '<br>🎤 Fremtredende' : ''}
+          <button onclick="editControl('${c.dato}')" style="float:right;background:#f97316;color:white;padding:6px 10px;border-radius:8px">Rediger</button>`;
+        div.appendChild(li);
+      });
+    });
+  }
+
+  window.editControl = function(date) {
+    const c = controls.find(x => x.dato === date);
+    document.getElementById('orgnr').value = c.orgnr;
+    document.getElementById('navn').value = c.navn;
+    document.getElementById('besoksadresse').value = c.adresse;
+    document.getElementById('besoks_postnr').value = c.postnr;
+    document.getElementById('besoks_poststed').value = c.poststed;
+    document.getElementById('firma').value = c.firma;
+    document.getElementById('type').value = c.type;
+    document.getElementById('hoyttalere').value = c.hoyttalere;
+    document.getElementById('kommentar').value = c.kommentar;
+    document.getElementById('tariff-rows').innerHTML = '';
+    c.tariff.forEach(t => addRow(t));
+    show('kontroll');
+  };
+
   // INIT
   addRow();
   renderDashboard();
+  renderArchive();
 </script>
 </body>
 </html>
