@@ -26,7 +26,10 @@
   .btn-amber{background:#f59e0b}
   .btn-reset{background:#6b7280;margin-top:4px}
   .log{font-size:13px;color:#10b981;background:#f0fdf4;padding:6px;border-radius:8px;margin-top:2px}
-  .color-dot{width:16px;height:16px;border-radius:50%;margin-top:4px}
+  .list-item{background:white;padding:8px;border-radius:8px;margin:4px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .list-item > div{flex:1;min-width:100px}
+  .list-item button{width:36px;height:36px;padding:0}
+  .color-dot{width:16px;height:16px;border-radius:50%}
 </style>
 </head>
 <body>
@@ -67,11 +70,7 @@
 <!-- ============================== LISTER ============================== -->
 <div id="lister" class="page">
   <div class="card">
-    <div class="row">
-      <input id="newListName" placeholder="Navn på ny liste">
-      <button class="btn-p" onclick="createList()">+ Opprett</button>
-    </div>
-    <input type="file" id="excelFile" accept=".xlsx" onchange="importExcel(event)" style="margin-top:8px">
+    <input type="file" id="excelFile" accept=".xlsx" onchange="importExcel(event)" style="margin-bottom:8px">
   </div>
   <div id="lists-dashboard"></div>
 </div>
@@ -108,15 +107,14 @@
       if(!r.ok) throw '';
       const d=await r.json();
       const a=d.forretningsadresse||d.beliggenhetsadresse||{};
-      if(!document.getElementById('navn').value) document.getElementById('navn').value=d.navn||'';
-      if(!document.getElementById('besoksadresse').value) document.getElementById('besoksadresse').value=a.adresse?.join(', ')||'';
+      // BEHOLDER navn og adresse fra Excel – overskriver kun post
       document.getElementById('besoks_postnr').value=a.postnummer||'';
       document.getElementById('besoks_poststed').value=a.poststed||'';
       document.getElementById('firma').value=d.navn||'';
       const k=(d.naeringskode1?.kode||'').slice(0,2);
       const t= k==='56'?'Serveringssted':(k==='47'||k==='96'?'Kundelokale':'Serveringssted');
       document.getElementById('type').value=t;
-      document.getElementById('brreg-log').innerHTML='Hentet!';
+      document.getElementById('brreg-log').innerHTML='Hentet postadresse!';
       updateTariffDefault();
     }catch{
       document.getElementById('brreg-log').innerHTML='Ikke funnet';
@@ -227,13 +225,51 @@
     win.print();
   }
 
-  // === LISTER – ALT DU BA OM ===
-  function createList(){
-    const name = document.getElementById('newListName').value.trim() || 'Liste '+new Date().toLocaleDateString();
-    lists.push({id:Date.now(), name, date:new Date().toISOString(), items:[]});
-    s.setItem('lists',JSON.stringify(lists));
-    document.getElementById('newListName').value='';
-    renderDashboard();
+  // === LISTER – 100 % DIN ===
+  function importExcel(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const name = file.name.replace('.xlsx','').replace('.xls','');
+      const L = {id:Date.now(), name, date:new Date().toISOString(), items:[]};
+      wb.SheetNames.forEach(sheet => {
+        const ws = wb.Sheets[sheet];
+        const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        const headers = json[0];
+        json.slice(1).forEach(row => {
+          const obj = {};
+          headers.forEach((h,i) => {
+            if(h) obj[h] = row[i] || '';
+          });
+          if(obj.Orgnummer || obj['B']) L.items.push({
+            Orgnummer: obj.Orgnummer || obj['B'] || '',
+            Navn: obj.Besøksnavn || obj['C'] || '',
+            Besøksadresse: obj.Gateadresse || obj['D'] || '',
+            Postnr: obj.Postnr || obj['E'] || '',
+            Poststed: obj.Poststed || obj['F'] || '',
+            note: obj.Kommentar || obj['A'] || '',
+            color:0
+          });
+        });
+      });
+      lists.push(L);
+      s.setItem('lists',JSON.stringify(lists));
+      renderDashboard();
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function editListName(id){
+    const L = lists.find(l=>l.id===id);
+    const newName = prompt('Nytt navn på listen', L.name);
+    if(newName) {
+      L.name = newName;
+      s.setItem('lists',JSON.stringify(lists));
+      renderDashboard();
+    }
   }
 
   function deleteList(id){
@@ -251,19 +287,6 @@
       s.setItem('lists',JSON.stringify(lists));
       renderDashboard();
     }
-  }
-
-  function addManualItem(listId){
-    const L = lists.find(l=>l.id===listId);
-    L.items.push({Orgnummer:'',Navn:'',Besøksadresse:'',Postnr:'',Poststed:'',note:'',color:0});
-    s.setItem('lists',JSON.stringify(lists));
-    renderDashboard();
-  }
-
-  function sortBy(prop){
-    lists.forEach(L=>L.items.sort((a,b)=> (a[prop]||'').localeCompare(b[prop]||'')));
-    s.setItem('lists',JSON.stringify(lists));
-    renderDashboard();
   }
 
   function openMap(addr){
@@ -297,14 +320,9 @@
       const box=document.createElement('div'); box.className='card';
       box.innerHTML=`
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <strong>${L.name}</strong>
+          <strong onclick="editListName(${L.id})" style="cursor:pointer">${L.name}</strong>
           <small>${new Date(L.date).toLocaleDateString()}</small>
           <button class="btn-r" style="padding:4px 8px" onclick="deleteList(${L.id})">🗑</button>
-        </div>
-        <div style="margin-bottom:8px">
-          <button onclick="sortBy('color')" style="margin-right:4px">Farge</button>
-          <button onclick="sortBy('Besøksadresse')">Adresse</button>
-          <button class="btn-green" style="float:right;padding:4px 8px" onclick="addManualItem(${L.id})">+ Ny rad</button>
         </div>
         <div id="items-${L.id}"></div>
       `;
@@ -313,13 +331,15 @@
       L.items.forEach((it,i)=>{
         const colors=['#fff','#10b981','#f59e0b','#ef4444'];
         const addr = `${it.Besøksadresse||''} ${it.Postnr||''} ${it.Poststed||''}`.trim();
-        const row=document.createElement('div'); row.className='row';
-        row.style='background:white;padding:8px;border-radius:8px;margin:4px 0;align-items:flex-start';
+        const row=document.createElement('div'); row.className='list-item';
         row.innerHTML=`
-          <div class="color-dot" style="background:${colors[it.color||0]};width:16px;height:16px;border-radius:50%;margin-top:4px"></div>
-          <div style="flex:1">
+          <div class="color-dot" style="background:${colors[it.color||0]}"></div>
+          <div>
             <div style="font-weight:600">${it.Orgnummer||''} ${it.Navn||''}</div>
-            <div onclick="openMap('${addr}')" style="color:#0066cc;cursor:pointer">${addr||'–'}</div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span>${addr||'–'}</span>
+              <button onclick="openMap('${addr}')" style="width:28px;height:28px;padding:0;background:#0066cc;color:white;border-radius:50%;font-size:14px">🗺️</button>
+            </div>
             <div contenteditable onblur="L.items[${i}].note=this.innerText;s.setItem('lists',JSON.stringify(lists))" style="font-size:13px;color:#666;margin-top:2px">
               ${it.note||'Trykk for notat'}
             </div>
@@ -331,7 +351,7 @@
               <option value="2" ${it.color==2?'selected':''}>🟡</option>
               <option value="3" ${it.color==3?'selected':''}>🔴</option>
             </select>
-            <button onclick="loadFromList(${L.id},${i})" style="padding:4px 8px">Start</button>
+            <button onclick="loadFromList(${L.id},${i})" style="padding:4px 8px">KONTROLL</button>
             <button onclick="moveToDone(${L.id},${i})" class="btn-green" style="padding:4px 8px">✔</button>
             <button onclick="deleteItem(${L.id},${i})" class="btn-r" style="padding:4px 8px">−</button>
           </div>
@@ -350,7 +370,7 @@
     document.getElementById('besoks_postnr').value = item.Postnr||'';
     document.getElementById('besoks_poststed').value = item.Poststed||'';
     show('kontroll');
-    searchBrreg();
+    searchBrreg(); // Henter kun postadresse
   }
 
   function renderArchive(){
