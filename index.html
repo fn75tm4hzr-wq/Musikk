@@ -238,7 +238,7 @@
   function printReceipt(){
     const data=getFormData();
     const text=`KONTROLL\n${data.navn}\n${data.orgnr}\n${data.tariff.map(t=>`${t.type}: ${t.kvm}kvm/${t.dager}d`).join('\n')}\n${data.kommentar}`;
-    const win=window.open('','','width=300,height:500');
+    const win=window.open('','','width=300,height=500');
     win.document.write('<pre style="font:14px monospace">'+text+'</pre>');
     win.print();
   }
@@ -256,17 +256,14 @@
       wb.SheetNames.forEach(sheet => {
         const ws = wb.Sheets[sheet];
         const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        const headers = json[0];
         json.slice(1).forEach(row => {
-          const obj = {};
-          headers.forEach((h,i) => obj[h] = row[i] || '');
           L.items.push({
-            Orgnummer: obj['B'] || '',
-            Navn: obj['C'] || '',
-            Gateadresse: obj['D'] || '',
-            Postnr: obj['E'] || '',
-            Poststed: obj['F'] || '',
-            Kommentar: obj['A'] || '',
+            Orgnummer: row[1] || '',
+            Navn: row[2] || '',
+            Gateadresse: row[3] || '',
+            Postnr: row[4] || '',
+            Poststed: row[5] || '',
+            Kommentar: row[0] || '',
             color:0
           });
         });
